@@ -1,6 +1,6 @@
 {
   "name": "use-health-check",
-  "version": "0.1.0",
+  "version": "1.0",
   "description": "A React hook for polling an endpoint to check whether it's healthy/reachable.",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -15,13 +15,17 @@
   },
   "keywords": [
     "react",
-    "react-hook",
-    "react-hooks",
-    "health-check",
-    "healthcheck",
+    "health",
+    "check",
+    "hook",
+    "detect",
+    "offline",
+    "connectivity",
+    "internet",
+    "monitoring",
     "uptime",
-    "polling",
-    "status"
+    "status",
+    "api"
   ],
   "author": "Lex Alexander",
   "license": "MIT",
