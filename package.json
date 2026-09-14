@@ -1,6 +1,6 @@
 {
   "name": "use-health-check",
-  "version": "1.0",
+  "version": "1.0.0",
   "description": "A React hook for polling an endpoint to check whether it's healthy/reachable.",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
