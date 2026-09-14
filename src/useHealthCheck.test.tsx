@@ -129,4 +129,59 @@ describe('useHealthCheck', () => {
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
   });
+
+  it.each([200, 503])('records elapsed response time for HTTP %s', async (status) => {
+    mockFetch = jest.spyOn(global, 'fetch').mockImplementation(() =>
+      new Promise((resolve) => setTimeout(() => resolve({ ok: status === 200, status } as Response), 125))
+    );
+    const { result } = renderHook(() => useHealthCheck('/health', { interval: 0 }));
+    expect(result.current.responseTime).toBeNull();
+    await act(async () => { jest.advanceTimersByTime(125); });
+    expect(result.current.responseTime).toBe(125);
+  });
+
+  it.each(['offline', 'network', 'timeout'])('clears previous timing after %s failure', async (failure) => {
+    mockFetch = jest.spyOn(global, 'fetch').mockResolvedValue({ ok: true, status: 200 } as Response);
+    const { result } = renderHook(() => useHealthCheck('/health', { enabled: false, timeout: 500 }));
+    await act(() => result.current.healthCheck());
+    expect(result.current.responseTime).not.toBeNull();
+
+    if (failure === 'offline') setOnLine(false);
+    if (failure === 'network') mockFetch.mockRejectedValue(new Error('network down'));
+    if (failure === 'timeout') {
+      mockFetch.mockImplementation((_url, options) => new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(new Error('timed out')));
+      }));
+    }
+    await act(async () => {
+      const check = result.current.healthCheck();
+      jest.advanceTimersByTime(500);
+      await check;
+    });
+    expect(result.current.responseTime).toBeNull();
+    expect(result.current.isChecking).toBe(false);
+  });
+
+  it('ignores timing from a superseded request', async () => {
+    let resolveFirst!: (response: Response) => void;
+    mockFetch = jest.spyOn(global, 'fetch')
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockImplementationOnce(() => new Promise((resolve) => setTimeout(() => resolve({ ok: true } as Response), 25)));
+    const { result } = renderHook(() => useHealthCheck('/health', { enabled: false }));
+    let first!: Promise<void>;
+    act(() => { first = result.current.healthCheck(); });
+    await act(async () => {
+      const second = result.current.healthCheck();
+      jest.advanceTimersByTime(25);
+      await second;
+    });
+    expect(result.current.responseTime).toBe(25);
+    await act(async () => {
+      jest.advanceTimersByTime(100);
+      resolveFirst({ ok: true } as Response);
+      await first;
+    });
+    expect(result.current.responseTime).toBe(25);
+  });
+
 });

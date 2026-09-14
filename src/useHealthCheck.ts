@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface UseHealthCheckOptions {
   /** How often to re-check, in ms. Set to 0 to disable polling (still runs once on mount / healthCheck). Default 30000. */
@@ -8,7 +8,7 @@ export interface UseHealthCheckOptions {
   /** Pause checks entirely, e.g. while a feature using this hook is hidden. Default true. */
   enabled?: boolean;
   /** HTTP method used for the check. Default 'HEAD'. */
-  method?: 'GET' | 'HEAD';
+  method?: "GET" | "HEAD";
   /** Called whenever isHealthy transitions to a new value. */
   onStatusChange?: (isHealthy: boolean) => void;
 }
@@ -19,30 +19,33 @@ export interface UseHealthCheckValues {
   isChecking: boolean;
   lastChecked: Date | null;
   error: string | null;
+  /** Latest check time to response headers, in ms; null before a response or when a check fails without one. */
+  responseTime: number | null;
   /** Run a check immediately, outside the polling interval. */
   healthCheck: () => Promise<void>;
 }
 
-const missingWindow = typeof window === 'undefined';
+const missingWindow = typeof window === "undefined";
 
 const DEFAULT_INTERVAL = 30000;
 const DEFAULT_TIMEOUT = 5000;
 
 export const useHealthCheck = (
   url: string,
-  options: UseHealthCheckOptions = {}
+  options: UseHealthCheckOptions = {},
 ): UseHealthCheckValues => {
   const {
     interval = DEFAULT_INTERVAL,
     timeout = DEFAULT_TIMEOUT,
     enabled = true,
-    method = 'HEAD',
+    method = "HEAD",
     onStatusChange,
   } = options;
 
   const [isHealthy, setIsHealthy] = useState<boolean | null>(null);
   const [isChecking, setIsChecking] = useState(false);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const [responseTime, setResponseTime] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const isHealthyRef = useRef(isHealthy);
@@ -66,12 +69,13 @@ export const useHealthCheck = (
       return;
     }
 
-    // A newer check supersedes whatever's still in flight.
     controllerRef.current?.abort();
     const requestId = ++requestIdRef.current;
 
     if (!window.navigator.onLine) {
-      setError('Browser is offline');
+      setResponseTime(null);
+      setIsChecking(false);
+      setError("Browser is offline");
       setLastChecked(new Date());
       reportHealthCheckStatus(false);
       return;
@@ -82,26 +86,39 @@ export const useHealthCheck = (
     const controller = new AbortController();
     controllerRef.current = controller;
     const timer = setTimeout(
-      () => controller.abort(new Error(`Health check timed out after ${timeout}ms`)),
-      timeout
+      () =>
+        controller.abort(
+          new Error(`Health check timed out after ${timeout}ms`),
+        ),
+      timeout,
     );
+
+    const startedAt = performance.now();
 
     try {
       const response = await fetch(url, {
         method,
-        cache: 'no-store',
+        cache: "no-store",
         signal: controller.signal,
       });
 
-      if (requestIdRef.current !== requestId) return;
+      if (requestIdRef.current !== requestId) {
+        return void 0;
+      }
+      const endTime = performance.now();
+      const responseTimeDiff = endTime - startedAt;
 
+      setResponseTime(responseTimeDiff);
       reportHealthCheckStatus(response.ok);
       setError(response.ok ? null : `Received status ${response.status}`);
     } catch (err) {
-      if (requestIdRef.current !== requestId) return;
+      if (requestIdRef.current !== requestId) {
+        return void 0;
+      }
 
+      setResponseTime(null);
       reportHealthCheckStatus(false);
-      setError(err instanceof Error ? err.message : 'Health check failed');
+      setError(err instanceof Error ? err.message : "Health check failed");
     } finally {
       clearTimeout(timer);
       if (requestIdRef.current === requestId) {
@@ -121,7 +138,7 @@ export const useHealthCheck = (
 
     const runHealthCheck = async () => {
       if (active) {
-        await healthCheck()
+        await healthCheck();
       }
     };
 
@@ -144,6 +161,7 @@ export const useHealthCheck = (
     isChecking,
     lastChecked,
     error,
+    responseTime,
     healthCheck: healthCheck,
   };
 };

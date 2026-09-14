@@ -14,7 +14,7 @@ npm install use-health-check
 import { useHealthCheck } from 'use-health-check';
 
 const ApiStatus = () => {
-  const { isHealthy, isChecking, lastChecked, error, healthCheck } = useHealthCheck(
+  const { isHealthy, isChecking, lastChecked, responseTime, error, healthCheck } = useHealthCheck(
     'https://api.example.com/health',
     { interval: 30000, timeout: 5000 }
   );
@@ -24,6 +24,7 @@ const ApiStatus = () => {
   return (
     <div>
       <p>API is {isHealthy ? 'up' : 'down'}</p>
+      {responseTime !== null && <p>Response time: {responseTime.toFixed(1)} ms</p>}
       {error && <p>{error}</p>}
       {lastChecked && <p>Last checked: {lastChecked.toLocaleTimeString()}</p>}
       <button onClick={healthCheck} disabled={isChecking}>
@@ -55,11 +56,13 @@ const ApiStatus = () => {
 | `isHealthy`    | `boolean \| null`         | `null` until the first check resolves.          |
 | `isChecking`   | `boolean`                 | `true` while a check is in flight.               |
 | `lastChecked`  | `Date \| null`            | Timestamp of the most recent check.             |
+| `responseTime` | `number \| null` | Latest check time to response headers, in milliseconds. |
 | `error`        | `string \| null`          | Error message from the most recent failed check. |
 | `healthCheck`     | `() => Promise<void>`     | Run a check immediately, outside the interval.  |
 
 ## Behavior notes
 
+- `responseTime` measures client-observed elapsed time until response headers arrive, including network latency, for both successful and non-2xx responses. It does not measure body download or server processing alone. The previous value remains while checking; it is `null` initially and after offline, network-error, or timeout checks.
 - A check counts as unhealthy on any non-2xx response, a network error, or a timeout.
 - If `navigator.onLine` is `false`, the hook reports unhealthy without making a network request.
 - In non-browser environments (SSR), the hook is a no-op and `isHealthy` stays `null`.
