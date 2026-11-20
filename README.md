@@ -1,6 +1,6 @@
 # use-health-check
 
-A React hook that polls an endpoint to check whether it's healthy/reachable.
+A React hook that polls an endpoint and reports its health, response time, and latest error.
 
 ## Installation
 
@@ -45,7 +45,7 @@ const ApiStatus = () => {
 | ----------------- | --------------------------------- | ---------- | -------------------------------------------------------------------- |
 | `interval`         | `number`                          | `30000`    | Time between checks, in ms. `0` disables polling (still checks once). |
 | `timeout`          | `number`                          | `5000`     | Abort a check that takes longer than this, in ms.                   |
-| `enabled`          | `boolean`                         | `true`     | Set `false` to pause checks entirely.                                |
+| `enabled`          | `boolean`                         | `true`     | Set `false` to stop automatic checks; manual checks still work.                                |
 | `method`           | `'GET' \| 'HEAD'`                 | `'HEAD'`   | HTTP method used for the check.                                     |
 | `onStatusChange`   | `(isHealthy: boolean) => void`    | —          | Called whenever health status transitions.                          |
 
@@ -60,12 +60,36 @@ const ApiStatus = () => {
 | `error`        | `string \| null`          | Error message from the most recent failed check. |
 | `healthCheck`     | `() => Promise<void>`     | Run a check immediately, outside the interval.  |
 
+## Manual checks
+
+To check only on demand, set `enabled: false` and call `healthCheck()`:
+
+```tsx
+const { isHealthy, isChecking, healthCheck } = useHealthCheck('/health', {
+  enabled: false,
+});
+
+// In your component's JSX:
+<button onClick={() => void healthCheck()} disabled={isChecking}>
+  Check now
+</button>
+```
+
+Use `interval: 0` instead if you want one automatic check on mount without
+recurring polling.
+
 ## Behavior notes
 
 - `responseTime` measures client-observed elapsed time until response headers arrive, including network latency, for both successful and non-2xx responses. It does not measure body download or server processing alone. The previous value remains while checking; it is `null` initially and after offline, network-error, or timeout checks.
+- Disabling automatic checks does not cancel a request already in flight.
 - A check counts as unhealthy on any non-2xx response, a network error, or a timeout.
 - If `navigator.onLine` is `false`, the hook reports unhealthy without making a network request.
 - In non-browser environments (SSR), the hook is a no-op and `isHealthy` stays `null`.
+
+## Changes in 1.1.0
+
+- Added `responseTime`, reporting milliseconds until response headers arrive for successful and non-2xx responses.
+- Response timing resets to `null` after offline, network-error, or timeout checks. Results from superseded requests are ignored.
 
 ## License
 
